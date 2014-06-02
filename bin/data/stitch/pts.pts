@@ -74,8 +74,8 @@
 #-defaultprojectfolder_custom ""
 #-defaultpanoramafilenamemode asproject
 #-defaultpanoramafilename_custom ""
-#-defaultpanoramafoldermode projectfolder
-#-defaultpanoramafolder_custom ""
+#-defaultpanoramafoldermode custom
+#-defaultpanoramafolder_custom "../panos"
 #-userelativesourceimagepaths 1
 #-optimizeraskreinitialize 1
 #-applytemplate_lens 1

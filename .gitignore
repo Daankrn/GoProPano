@@ -15,11 +15,8 @@ Release*/
 *.pyc
 
 */bin/*
-*bin/data/0/*
-*bin/data/1/*
-*bin/data/2/*
-*bin/data/3/*
-!*/bin/data/
+*bin/data/*
+!*/bin/data/stitch
 
 # IDE-specific ignore patterns
 

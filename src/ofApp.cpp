@@ -5,25 +5,22 @@ bool panoCheck[9999][8];
 
 //--------------------------------------------------------------
 void ofApp::setup(){
+    ofBackground(0);
     ofRegisterURLNotification(this);
     timer = startTime = ofGetElapsedTimeMillis();
     http.start();
+    start = false;
 
     downloadedPicture = true;
     panoNum = panoNumChk = imgNum =imgNumChk = 0;
     pts.open(ofToDataPath("stitch/pts.pts"), ofFile::ReadWrite, false);
     //turn on GoPro
     goProCommand(bacpac, "PW", "01");
-    //set to correct mode
-    goProCommand(bacpac, "CM", "01");
-    //silence gopro
-    goProCommand(camera, "BS", "00");
-    //delete all images
-    //goProCommand(camera, "DA");
-    //set resolution to 5mp
-    goProCommand(camera, "PR", "03");
-    //turn off LEDs
-    goProCommand(bacpac, "LB", "00");
+    
+    simulDown = picSum = totalPicSum = picsDownloaded = 0;
+    tempStop = false;
+    avrPanoTime = 0;
+
 }
 
 //--------------------------------------------------------------
@@ -35,6 +32,19 @@ void ofApp::update(){
         getLinks();
         getImages();
     }
+    //TEMP TEMP TEMP TEMP TEMP REPLACE WITH ARDUINO//
+    if(start && !tempStop && timer > 3000){
+        //take new picture.
+        inPosition();
+    }
+    
+    
+    //calculate total time
+    seconds = ofGetElapsedTimeMillis()/1000%60;
+    minutes = ofGetElapsedTimeMillis()/1000/60;
+    if(panoNumChk > 0){
+        avrPanoTime = panoNumChk/minutes;
+    }
 }
 
 
@@ -44,9 +54,11 @@ void ofApp::update(){
 //      picture download cue
 //      picture download statusbars
 void ofApp::draw(){
-    for (int i = 0; i < links.size(); i++) {
-        ofDrawBitmapString(links[i], 10, (i*15)+10);
-    }
+    ofDrawBitmapString("# of downloads = "+ofToString(simulDown), 15, 30);
+    ofDrawBitmapString("    total pics = "+ofToString(totalPicSum), 15, 45);
+    ofDrawBitmapString("  current pano = "+ofToString(panoNumChk), 15, 60);
+    ofDrawBitmapString("    total time = "+ofToString(minutes)+"m"+ofToString(seconds)+"s", 15, 90);
+    ofDrawBitmapString("  panos/minute = "+ofToString(avrPanoTime), 15, 105);
 }
 
 //--------------------------------------------------------------
@@ -63,7 +75,8 @@ void ofApp::keyPressed(int key){
         case 'd':
             getImages();
             break;
-        case 's':         ofSystem("open '/Applications/PTGui Pro.app'");break;
+        case 'i': initGoPro(); break;
+        case 's':start = true;break;
         default:
             break;
     }
@@ -99,7 +112,7 @@ void ofApp::goProCommand(string device, string cmd, string option){
 void ofApp::inPosition(){
     goProCommand("bacpac", "SH", "01");             //send command to gopro
     downloadedPicture = false;                      //declare there's a new pic
-    startTime = ofGetElapsedTimeMillis();           //start picture timer
+    startTime = ofGetElapsedTimeMillis();//start picture timer
 }
 
 
@@ -108,12 +121,19 @@ void ofApp::getImages(){
     // get last image
     cout << "downloading " << links.back() << endl;
     // save to file in correct folder
-    id = ofSaveURLAsync(goProFiles+links.back(),ofToString(panoNum)+"/img/"+ofToString(imgNum)+".jpg");
+    request = ofSaveURLAsync(goProFiles+links.back(),ofToString(panoNum)+"/img/"+ofToString(imgNum)+".jpg");
+    
+    picSum++;
+    simulDown++; //calculate simultaneous downloads
     imgNum++;
     //simple wrap around counter
     if(imgNum > 7) {
         imgNum = 00;
         panoNum++;
+    }
+    //pause image taking if 28 panorama's are taken
+    if (picSum == 195) {
+        tempStop = true;
     }
 }
 
@@ -123,7 +143,7 @@ void ofApp::startStich(int pano){
     ofLogNotice("starting Stitch");
     
     //set bash file
-    bashBuffer.set("#!/bin/bash \n open '/Applications/PTGui Pro.app' -n -W --args -batch -x '/Users/daankrijnen/Programming/of_v0.8.1_osx_release/apps/myApps/GoProPano/bin/data/"+ofToString(pano)+"/pts.pts'");
+    bashBuffer.set("#!/bin/bash \n open '/Applications/PTGui Pro.app' -n -W --args -batch -x '/Users/daankrijnen/Programming/of_v0.8.1_osx_release/apps/myApps/GoProPano/bin/data/"+ofToString(pano)+"/"+ofToString(pano)+"_R.pts'");
     ofBufferToFile("stitch.sh", bashBuffer); // save as .sh
     bashFile.open("stitch.sh");
     bashFile.setExecutable(true);       // set as executable
@@ -131,7 +151,7 @@ void ofApp::startStich(int pano){
     bashPath = bashFile.path();
     
     //copy pts project file
-    pts.copyTo(ofToDataPath(ofToString(panoNumChk)+"/pts.pts"));
+    pts.copyTo(ofToDataPath(ofToString(pano)+"/"+ofToString(pano)+"_R.pts"));
     
     char *pathChar;
     pathChar = new char[bashPath.length()+1];
@@ -164,13 +184,22 @@ void ofApp::urlResponse(ofHttpResponse & response){
     if(response.status==200){
         cout << response.request.name << " downloaded" << endl;
         cout << "pano=" << panoNumChk << " img=" << imgNumChk << endl;
-        imgNumChk++;
+        imgNumChk++; //count for within panorama
+        picsDownloaded++; //count for deleting all files in time
+        totalPicSum++; //count for total pics
+        simulDown--; //picture done downloading, delete 1.
         if(imgNumChk > 7){
             startStich(panoNumChk);
             imgNumChk = 0;
             panoNumChk++;
         }
-        
+        //if all images in queue are downloaded
+        if(picsDownloaded == picSum){
+            goProCommand(camera, "DA");     //delete all pics
+            picsDownloaded = 0;
+            picSum = 0;
+            tempStop = false;               //start taking new pics
+        }
         //reply if file downloaded
     }else{
 		cout << response.status << " " << response.error << endl;
@@ -203,6 +232,24 @@ void ofApp::search_for_links(GumboNode* node)
         search_for_links(static_cast<GumboNode*>(children->data[i]));
         
     }
+}
+
+//--------------------------------------------------------------
+void ofApp::initGoPro(){
+    //set to correct mode
+    goProCommand(camera, "CM", "01");
+    ofSleepMillis(300);
+    //silence gopro
+    goProCommand(camera, "BS", "00");
+    //ofSleepMillis(300);
+    //delete all images
+    //goProCommand(camera, "DA");
+    ofSleepMillis(300);
+    //set resolution to 12mp wide
+    //goProCommand(camera, "PR", "05");
+    //turn off LEDs
+    //goProCommand(bacpac, "LB", "01");
+    ofLogNotice("initiated");
 }
 
 //--------------------------------------------------------------
