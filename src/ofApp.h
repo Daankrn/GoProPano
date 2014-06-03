@@ -4,6 +4,10 @@
 #include "ofxNetwork.h"
 #include "ofxHttpUtils.h"
 #include "ofxGumbo.h"
+#include "ofxOsc.h"
+
+#define HOST "localhost"
+#define PORT 7777
 
 class ofApp : public ofBaseApp{
 
@@ -68,4 +72,7 @@ class ofApp : public ofBaseApp{
     
     
     vector<string> links;                   //vector of links to GoPro pictures
+    
+    //OSC implementation
+    ofxOscSender oscSender;
 };

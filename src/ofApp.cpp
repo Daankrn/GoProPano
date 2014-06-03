@@ -6,6 +6,7 @@ bool panoCheck[9999][8];
 //--------------------------------------------------------------
 void ofApp::setup(){
     ofBackground(0);
+    oscSender.setup(HOST, PORT);
     ofRegisterURLNotification(this);
     timer = startTime = ofGetElapsedTimeMillis();
     http.start();
@@ -35,6 +36,10 @@ void ofApp::update(){
     //TEMP TEMP TEMP TEMP TEMP REPLACE WITH ARDUINO//
     if(start && !tempStop && timer > 3000){
         //take new picture.
+        ofxOscMessage m;
+        m.setAddress("/pic");
+        m.addIntArg(1);
+        oscSender.sendMessage(m);
         inPosition();
     }
     
@@ -63,6 +68,7 @@ void ofApp::draw(){
 
 //--------------------------------------------------------------
 void ofApp::keyPressed(int key){
+    ofxOscMessage m;
     switch (key) {
         case 'p':
             goProCommand("bacpac", "SH", "01");
@@ -77,6 +83,7 @@ void ofApp::keyPressed(int key){
             break;
         case 'i': initGoPro(); break;
         case 's':start = true;break;
+        case 'a':m.setAddress("/pic"); m.addIntArg(1); oscSender.sendMessage(m);break;
         default:
             break;
     }
